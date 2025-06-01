@@ -1,0 +1,62 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# PyTorch artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Dataset files (customize as needed)
+data/
+datasets/
+*.h5
+*.tar
+*.zip
+*.npz
+
+# Logs and TensorBoard
+logs/
+*.log
+runs/
+events.out.tfevents.*
+
+# Checkpoints and results
+checkpoints/
+output/
+results/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Editor-specific
+.vscode/
+.idea/
+*.swp
+*~
+
+# PyCharm
+*.iml
+*.ipr
+*.iws
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# pip or uv package manager artifacts
+pip-wheel-metadata/
+__pypackages__/
+

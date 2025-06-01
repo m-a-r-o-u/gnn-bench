@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnn-bench"
+version = "0.1.0"
+description = "Scalable GNN benchmarking suite (CPU or single‐GPU through multi‐node DDP)."
+readme = "README.md"
+authors = [
+  {name = "Dr. Mares Barekzai", email = "mares.barekzai@lrz.de"}
+]
+license = {text = "MIT"}
+
+dependencies = [
+    "numpy<2.0",
+    "torch-geometric",
+    "ogb",
+    "filelock",
+    "psutil",
+    "tqdm",
+    "matplotlib>=3.5",
+    "networkx>=2.8",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+cuda121 = [
+    "torch @ https://download.pytorch.org/whl/cu121/torch-2.2.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
+    "torchvision @ https://download.pytorch.org/whl/cu121/torchvision-0.17.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
+    "torchaudio @ https://download.pytorch.org/whl/cu121/torchaudio-2.2.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
+    "pyg-lib @ https://data.pyg.org/whl/torch-2.2.0+cu121/pyg_lib-0.4.0+pt22cu121-cp310-cp310-linux_x86_64.whl",
+    "torch-scatter @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_scatter-2.1.2+pt22cu121-cp310-cp310-linux_x86_64.whl",
+    "torch-sparse @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_sparse-0.6.18+pt22cu121-cp310-cp310-linux_x86_64.whl",
+    "torch-cluster @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_cluster-1.6.3+pt22cu121-cp310-cp310-linux_x86_64.whl",
+    "torch-spline-conv @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_spline_conv-1.2.2+pt22cu121-cp310-cp310-linux_x86_64.whl"
+]
+
+cpu = [
+    "torch",
+    "torchvision",
+    "torchaudio"
+]
+
+[project.scripts]
+gnn_bench_run = "gnn_bench.cli:run_entry"
+gnn_bench_plot = "gnn_bench.cli:plot_entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]
