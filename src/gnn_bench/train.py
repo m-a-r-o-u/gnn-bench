@@ -89,6 +89,7 @@ def load_dataset(name: str):
     elif name.startswith("ogbn-"):
         dataset = PygNodePropPredDataset(name=name, root=os.path.join(os.getcwd(), "data"))
         data = dataset[0]
+        data.y = data.y.squeeze(1)
         split_idx = dataset.get_idx_split()
         train_idx = split_idx["train"]
         val_idx = split_idx["valid"]

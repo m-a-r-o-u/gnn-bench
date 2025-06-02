@@ -13,7 +13,7 @@ authors = [
 license = {text = "MIT"}
 
 dependencies = [
-    "numpy<2.0",
+    "numpy",
     "torch-geometric",
     "ogb",
     "filelock",
@@ -36,11 +36,13 @@ cuda121 = [
     "torch-spline-conv @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_spline_conv-1.2.2+pt22cu121-cp310-cp310-linux_x86_64.whl"
 ]
 
-cpu = [
-    "torch",
+mac = [
+    "torch==2.7",
     "torchvision",
-    "torchaudio"
+    "torchaudio",
+    "pyg-lib @ file:///Users/di38qex/wheelhouse/pyg_lib-0.4.0+pt27-cp310-cp310-macosx_15_0_arm64.whl",
 ]
+
 
 [project.scripts]
 gnn_bench_run = "gnn_bench.cli:run_entry"
