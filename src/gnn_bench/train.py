@@ -14,6 +14,19 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.nn import GCNConv, GATConv
 from torch_geometric.loader import NeighborLoader
 
+from torch_geometric.data.data import Data, DataEdgeAttr, DataTensorAttr
+from torch_geometric.data.storage import NodeStorage, EdgeStorage, GlobalStorage
+
+# Tell torch.load it’s okay to unpickle these PyG classes:
+torch.serialization.add_safe_globals([
+    Data,
+    DataEdgeAttr,
+    DataTensorAttr,
+    NodeStorage,
+    EdgeStorage,
+    GlobalStorage,
+])
+
 from ogb.nodeproppred import PygNodePropPredDataset
 
 from .db_logger import DBLogger

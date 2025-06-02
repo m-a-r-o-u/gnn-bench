@@ -1,12 +1,12 @@
 # GNN Bench
 
-A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting full-graph training on CPU, single-GPU, or multi-GPU (DDP). Includes logging of key metrics (loss, accuracy, throughput, timing) into a SQLite database, and automatic plotting of results into Markdown and PNG files.
+A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-batch neighbor sampling training on CPU, single-GPU, or multi-GPU (DDP). Includes logging of key metrics (loss, accuracy, throughput, timing) into a SQLite database, and automatic plotting of results into Markdown and PNG files.
 
 ---
 
 ## Features
 
-- **Full-graph training** on Planetoid (Cora, Citeseer, Pubmed) or OGB (ogbn-arxiv, ogbn-products, etc.).
+- **Mini-batch neighbor sampling training** on Planetoid (Cora, Citeseer, Pubmed) or OGB (ogbn-arxiv, ogbn-products, etc.).
 - **Models**: 2-layer GCN or 2-layer GAT (configurable hidden dim, number of heads, dropout).
 - **Distributed**: PyTorch DDP for multi-GPU on one node or across multiple nodes.
 - **Logging**: Per-run parameters and metrics (final losses, accuracies, average throughput/time, total time) saved to `results/results.db`.
@@ -102,11 +102,11 @@ experiments:
     num_heads:   4                    # GAT attention heads
     dropout:     0.6                  # Dropout probability
     seed:        42
-    world_size:  1                    # Full-graph, single-GPU/CPU
+    world_size:  1                    # Single-process, mini-batch neighbor sampling
 ```
 
-- **`batch_size`** is currently *not used* in full-graph training (all nodes in one pass). It influences *only* throughput reporting.  
-- To switch to true mini-batch neighbor sampling (so `batch_size` actually changes accuracy), you would need to replace the full-graph loop with a `NeighborLoader`. But if your graph fits in memory, full-graph is simpler and perfectly acceptable.
+- **`batch_size`** defines the number of root nodes per mini-batch subgraph in neighbor sampling, controlling subgraph size and memory usage.
+- We use `NeighborLoader` to generate two-layer subgraphs with a fixed fan-out of 10 neighbors per node by default. You can modify `num_neighbors` in `src/gnn_bench/train.py` to adjust per-layer sampling.
 
 ---
 
@@ -189,17 +189,10 @@ results/
 
 ---
 
-## Why Loss & Accuracy Are Identical Across “batch_size” When Using Full-Graph
+## How Batch Size Affects Neighbor Sampling Training
 
-- **Full-graph training** means each epoch processes *all* train nodes in one forward/backward pass:
-  ```python
-  out = model(data.x, data.edge_index)
-  loss = criterion(out[train_mask], data.y[train_mask])
-  ```
-- In this mode, `batch_size` is **not used** to split the data. Thus, changing `batch_size` does nothing to the parameter updates—every run follows the same exact gradients (given identical seed).  
-- The only metric that changes slightly is **throughput**, calculated as `(num_nodes)/(epoch_time)`, because minor timing fluctuations occur on repeated runs.
-
-If you want a benchmark where `batch_size` *does* affect training (and model convergence), switch to a **mini-batch neighbor sampler** (e.g., `torch_geometric.loader.NeighborLoader`). That way, each iteration processes only a subset of nodes (and their sampled neighbors), and `batch_size` truly controls the number of nodes per update.
+- We use **mini-batch neighbor sampling** via `NeighborLoader`, where each epoch processes subgraphs of `batch_size` root nodes and their sampled neighbors (two-layer fan-out of 10 by default).
+- Changing `batch_size` thus affects both the number of parameter updates per epoch and the size of each subgraph, influencing memory usage and potentially model convergence.
 
 ---
 
@@ -289,7 +282,7 @@ experiments:
   ```
   Just ensure your `train.py` logs both `"throughput": avg_throughput` and `"avg_throughput": avg_throughput`.
 
-- **Batch size has no effect** under full-graph training. Only throughput changes. See **Why Loss & Accuracy Are Identical** above.
+- **Plotting may crash on headless servers**: If you see a segmentation fault during plotting (e.g., no DISPLAY), it's likely due to an interactive GUI backend. We enforce the non-interactive 'Agg' backend in `plot.py` to avoid this.
 
 ---
 

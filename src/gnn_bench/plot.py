@@ -2,6 +2,9 @@
 
 import os
 import sqlite3
+import matplotlib
+# Use non-interactive backend to avoid crashes on headless servers
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime

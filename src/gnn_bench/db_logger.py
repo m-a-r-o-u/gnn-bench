@@ -33,8 +33,10 @@ class DBLogger:
 
     def _init_db(self):
         with _LOCK:
-            conn = sqlite3.connect(self.db_path)
+            # Use WAL journal mode and a timeout for safe concurrent writes
+            conn = sqlite3.connect(self.db_path, timeout=30)
             c = conn.cursor()
+            c.execute("PRAGMA journal_mode=WAL;")
             c.execute("""
                 CREATE TABLE IF NOT EXISTS runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +71,8 @@ class DBLogger:
           total_train_time, throughput
         """
         with _LOCK:
-            conn = sqlite3.connect(self.db_path)
+            # Timeout for waiting on database locks in concurrent scenarios
+            conn = sqlite3.connect(self.db_path, timeout=30)
             c = conn.cursor()
             c.execute("""
                 INSERT INTO runs (
