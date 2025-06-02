@@ -12,13 +12,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import numpy as np
 from torch_geometric.datasets import Planetoid
 from torch_geometric.nn import GCNConv, GATConv
+from torch_geometric.loader import NeighborLoader
 
 from ogb.nodeproppred import PygNodePropPredDataset
-from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
-from torch_geometric.data.storage import GlobalStorage
 
-from .ddp_utils import setup_ddp, cleanup_ddp
 from .db_logger import DBLogger
+from .ddp_utils import setup_ddp, cleanup_ddp
 
 
 class GCN(torch.nn.Module):
@@ -62,7 +61,7 @@ def set_seed(seed: int):
 def load_dataset(name: str):
     """
     Returns (data, in_channels, num_classes, train_mask, val_mask).
-    Supports Planetoid (e.g. Cora) and OGB (e.g. ogbn-arxiv).
+    Supports Planetoid (e.g. Cora/Citeseer/Pubmed) and OGB (e.g. ogbn-arxiv).
     """
     if name in ["Cora", "Citeseer", "Pubmed"]:
         path = os.path.join(os.getcwd(), "data", name)
@@ -75,25 +74,14 @@ def load_dataset(name: str):
         return data, in_channels, num_classes, train_mask, val_mask
 
     elif name.startswith("ogbn-"):
-        # Allowlist PyG classes before torch.load (PyTorch 2.6+)
-        torch.serialization.add_safe_globals([
-            DataEdgeAttr,
-            DataTensorAttr,
-            GlobalStorage
-        ])
-
-        dataset = PygNodePropPredDataset(
-            name=name,
-            root=os.path.join(os.getcwd(), "data", name)
-        )
-        split_idx = dataset.get_idx_split()
+        dataset = PygNodePropPredDataset(name=name, root=os.path.join(os.getcwd(), "data"))
         data = dataset[0]
-        data.y = data.y.squeeze(1)
-
+        split_idx = dataset.get_idx_split()
         train_idx = split_idx["train"]
         val_idx = split_idx["valid"]
-        num_nodes = data.num_nodes
 
+        # Create boolean masks
+        num_nodes = data.num_nodes
         train_mask = torch.zeros(num_nodes, dtype=torch.bool)
         train_mask[train_idx] = True
         val_mask = torch.zeros(num_nodes, dtype=torch.bool)
@@ -107,43 +95,67 @@ def load_dataset(name: str):
         raise ValueError(f"Unsupported dataset: {name}")
 
 
-def train_epoch(model, optimizer, criterion, data, train_mask, device):
+def train_epoch(model, optimizer, criterion, train_loader, device):
     """
-    Runs one training epoch, returns (loss, accuracy).
+    Runs one training epoch using mini-batches from train_loader.
+    Returns (average loss, average accuracy).
     """
     model.train()
-    optimizer.zero_grad()
-    out = model(data.x, data.edge_index)
-    loss = criterion(out[train_mask], data.y[train_mask].to(device))
-    loss.backward()
-    optimizer.step()
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
 
-    preds = out[train_mask].argmax(dim=1)
-    acc = (preds == data.y[train_mask].to(device)).float().mean().item()
-    return loss.item(), acc
+    for batch in train_loader:
+        batch = batch.to(device)
+        optimizer.zero_grad()
+
+        out = model(batch.x, batch.edge_index)
+        out_root = out[: batch.batch_size]
+        y_root = batch.y[: batch.batch_size].to(device)
+
+        loss = criterion(out_root, y_root)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += float(loss) * out_root.size(0)
+        total_correct += int((out_root.argmax(dim=1) == y_root).sum())
+        total_examples += out_root.size(0)
+
+    avg_loss = total_loss / total_examples
+    avg_acc = total_correct / total_examples
+    return avg_loss, avg_acc
 
 
-def evaluate(model, criterion, data, mask, device):
+def evaluate(model, criterion, val_loader, device):
     """
-    Evaluates on the given mask (validation/test), returns (loss, accuracy).
+    Evaluates on the validation set using mini-batches from val_loader.
+    Returns (average loss, average accuracy).
     """
     model.eval()
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
     with torch.no_grad():
-        out = model(data.x, data.edge_index)
-        loss = criterion(out[mask], data.y[mask].to(device))
-        preds = out[mask].argmax(dim=1)
-        acc = (preds == data.y[mask].to(device)).float().mean().item()
-    return loss.item(), acc
+        for batch in val_loader:
+            batch = batch.to(device)
+            out = model(batch.x, batch.edge_index)
+            out_root = out[: batch.batch_size]
+            y_root = batch.y[: batch.batch_size].to(device)
+
+            loss = criterion(out_root, y_root)
+            total_loss += float(loss) * out_root.size(0)
+            total_correct += int((out_root.argmax(dim=1) == y_root).sum())
+            total_examples += out_root.size(0)
+
+    avg_loss = total_loss / total_examples
+    avg_acc = total_correct / total_examples
+    return avg_loss, avg_acc
 
 
 def main(args):
     """
-    Single run of GNN training & evaluation (node-level).
-    - Supports Planetoid (Cora/Citeseer/Pubmed) and OGB (e.g. ogbn-arxiv).
-    - Prints a one-line summary of parameters used at start of run.
-    - Prints per-epoch metrics: TLoss, TAcc, VLoss, VAcc, Time, Thr.
-    - At end prints a concise summary: batch_size, Avg VAcc, Avg Thr.
-    - Logs to SQLite via DBLogger.
+    Single run of GNN training & evaluation (node-level) with mini-batch neighbor sampling.
     """
     set_seed(args.seed)
 
@@ -155,9 +167,7 @@ def main(args):
         else:
             device = torch.device("cpu")
     else:
-        device = torch.device(
-            "cuda" if torch.cuda.is_available() and not getattr(args, "no_cuda", False) else "cpu"
-        )
+        device = torch.device("cuda" if torch.cuda.is_available() and not getattr(args, "no_cuda", False) else "cpu")
 
     # Print parameter summary (only rank 0/non-DDP)
     if (not is_ddp) or (is_ddp and args.rank == 0):
@@ -166,17 +176,18 @@ def main(args):
             f"model={args.model}",
             f"epochs={args.epochs}",
             f"batch_size={args.batch_size}",
-            f"lr={args.lr:.4f}",
+            f"lr={args.lr}",
             f"hidden_dim={args.hidden_dim}",
+            f"seed={args.seed}",
+            f"world_size={args.world_size}",
+            f"rank={args.rank}",
         ]
-        if args.model.lower() == "gat":
-            summary += [f"num_heads={args.num_heads}", f"dropout={args.dropout:.2f}"]
-        summary += [f"seed={args.seed}", f"world_size={args.world_size}"]
-        print("\n▶ Ex. Params: " + "  ".join(summary) + "\n")
+        print("▶ Ex. Params:", " | ".join(summary))
 
+    # Load data
     data, in_channels, num_classes, train_mask, val_mask = load_dataset(args.dataset)
-    data = data.to(device)
 
+    # Build model and move to device
     if args.model.lower() == "gcn":
         model = GCN(in_channels, args.hidden_dim, num_classes).to(device)
     elif args.model.lower() == "gat":
@@ -190,33 +201,46 @@ def main(args):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    # Metrics (excluding first epoch)
+    # Create NeighborLoader for training
+    train_loader = NeighborLoader(
+        data,
+        input_nodes=train_mask,
+        num_neighbors=[10, 10],
+        batch_size=args.batch_size,
+        shuffle=True,
+    )
+
+    # Create NeighborLoader for validation (no shuffling)
+    val_loader = NeighborLoader(
+        data,
+        input_nodes=val_mask,
+        num_neighbors=[10, 10],
+        batch_size=args.batch_size,
+        shuffle=False,
+    )
+
+    # Prepare metrics storage
     train_losses = []
     train_accuracies = []
     val_losses = []
     val_accuracies = []
     throughputs = []
     epoch_times = []
-
-    # All epoch times (including first), for total_train_time
     epoch_times_all = []
 
-    final_train_loss = None
-    final_val_loss = None
-    final_val_acc = None
+    num_train_nodes = int(train_mask.sum().item())
 
-    num_nodes = data.num_nodes
-
+    # Training loop
     for epoch in range(1, args.epochs + 1):
         epoch_start = time.time()
 
-        loss_train, acc_train = train_epoch(model, optimizer, criterion, data, train_mask, device)
-        loss_val, acc_val = evaluate(model, criterion, data, val_mask, device)
+        loss_train, acc_train = train_epoch(model, optimizer, criterion, train_loader, device)
+        loss_val, acc_val = evaluate(model, criterion, val_loader, device)
 
         epoch_end = time.time()
         epoch_time = epoch_end - epoch_start
-        epoch_throughput = num_nodes / epoch_time
-
+        # Throughput: number of training nodes processed per second
+        epoch_throughput = num_train_nodes / epoch_time
         epoch_times_all.append(epoch_time)
 
         if (not is_ddp) or (is_ddp and args.rank == 0):
@@ -227,12 +251,8 @@ def main(args):
                 f"VLoss={loss_val:.4f} "
                 f"VAcc={acc_val:.4f} "
                 f"Time={epoch_time:.2f}s "
-                f"Thr={epoch_throughput:.2f}"
+                f"Thr={epoch_throughput:.2f} nodes/s"
             )
-
-        final_train_loss = loss_train
-        final_val_loss = loss_val
-        final_val_acc = acc_val
 
         if epoch > 1:
             train_losses.append(loss_train)
@@ -242,6 +262,7 @@ def main(args):
             throughputs.append(epoch_throughput)
             epoch_times.append(epoch_time)
 
+    # Compute averages (excluding first epoch)
     if train_losses:
         avg_train_loss = sum(train_losses) / len(train_losses)
         avg_train_acc = sum(train_accuracies) / len(train_accuracies)
@@ -249,25 +270,19 @@ def main(args):
         avg_val_acc = sum(val_accuracies) / len(val_accuracies)
         avg_throughput = sum(throughputs) / len(throughputs)
         avg_time = sum(epoch_times) / len(epoch_times)
-    else:
-        avg_train_loss = final_train_loss
-        avg_train_acc = 0.0
-        avg_val_loss = final_val_loss
-        avg_val_acc = final_val_acc
-        avg_throughput = num_nodes / (epoch_end - epoch_start)
-        avg_time = (epoch_end - epoch_start)
 
-    # End‐of‐run summary (only rank 0/non-DDP)
-    if (not is_ddp) or (is_ddp and args.rank == 0):
-        print("\n=== Averages (excl. 1st epoch) ===")
-        print(
-            f"TLoss={avg_train_loss:.4f} "
-            f"TAcc={avg_train_acc:.4f} "
-            f"VLoss={avg_val_loss:.4f} "
-            f"VAcc={avg_val_acc:.4f} "
-            f"Time={avg_time:.2f}s "
-            f"Thr={avg_throughput:.2f} smpls/s\n"
-        )
+        # Print summary
+        if (not is_ddp) or (is_ddp and args.rank == 0):
+            print()
+            print("=== Averages (excl. 1st epoch) ===")
+            print(
+                f"TLoss={avg_train_loss:.4f} "
+                f"TAcc={avg_train_acc:.4f} "
+                f"VLoss={avg_val_loss:.4f} "
+                f"VAcc={avg_val_acc:.4f} "
+                f"Time={avg_time:.2f}s "
+                f"Thr={avg_throughput:.2f} nodes/s\n"
+            )
 
     # Log to database (only rank 0/non-DDP)
     if (not is_ddp) or (is_ddp and args.rank == 0):
@@ -285,46 +300,19 @@ def main(args):
             "rank": args.rank,
         }
         metrics = {
-            "final_train_loss": final_train_loss,
-            "final_val_loss": final_val_loss,
-            "final_val_acc": final_val_acc,
-            "throughput": avg_throughput,            # for backward compatibility
-            "avg_train_loss": avg_train_loss,
-            "avg_train_acc": avg_train_acc,
-            "avg_val_loss": avg_val_loss,
-            "avg_val_acc": avg_val_acc,
-            "avg_time": avg_time,
-            "avg_throughput": avg_throughput,
+            "final_train_loss": train_losses[-1] if train_losses else None,
+            "final_val_loss": val_losses[-1] if val_losses else None,
+            "final_val_acc": val_accuracies[-1] if val_accuracies else None,
+            "throughput": avg_throughput if train_losses else None,
+            "avg_train_loss": avg_train_loss if train_losses else None,
+            "avg_train_acc": avg_train_acc if train_losses else None,
+            "avg_val_loss": avg_val_loss if train_losses else None,
+            "avg_val_acc": avg_val_acc if train_losses else None,
+            "avg_time": avg_time if train_losses else None,
+            "avg_throughput": avg_throughput if train_losses else None,
             "total_train_time": sum(epoch_times_all),
         }
         logger.log_run(params, metrics)
 
     if is_ddp:
         cleanup_ddp()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
