@@ -1,0 +1,15 @@
+# config/gat_ogbn_products.yaml
+
+experiments:
+  - experiment_name: "gat_ogbn_products"
+    dataset:      "ogbn-products"      # OGB’s Products graph (~2.4 M nodes, 61 M edges)
+    model:        "gat"                # 2-layer GAT
+    epochs:       5                    # Few epochs to test throughput
+    batch_size:   [256, 512]           # Mini‐batch sizes for neighbor sampling
+    lr:           0.005                # Learning rate
+    hidden_dim:   128                  # Hidden dimension
+    num_heads:    4                    # GAT attention heads
+    dropout:      0.6                  # Dropout probability
+    seed:         42
+    world_size:   1                    # CPU-only, no DDP
+    no_cuda:      true                 # Force CPU for large dataset

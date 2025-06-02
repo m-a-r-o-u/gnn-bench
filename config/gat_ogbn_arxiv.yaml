@@ -1,36 +1,14 @@
 # config/gat_ogbn_arxiv.yaml
 
 experiments:
-  # 1) Single‐GPU (or CPU) GAT on OGBN-Arxiv (node classification)
   - experiment_name: "gat_ogbn_arxiv"
     dataset:     "ogbn-arxiv"         # OGB’s ArXiv paper citation graph
     model:       "gat"                # Graph Attention Network
-    epochs:      5                  # Number of training epochs
-    batch_size:  [256, 512, 1024]     # Sweep over these batch sizes
+    epochs:      5                    # Number of training epochs
+    batch_size:  [256, 512]           # Sweep over these batch sizes
     lr:          0.005                # Learning rate
     hidden_dim:  128                  # Hidden dimension size
     num_heads:   4                    # GAT: number of attention heads
     dropout:     0.6                  # GAT: dropout probability
     seed:        42
     world_size:  1                    # Single‐process (no DDP)
-    # (Optional) path to the SQLite DB; defaults to results/results.db if omitted
-    # results_db: "results/gat_arxiv_single.db"
-
-#  # 2) Multi‐GPU GAT sweep on OGBN-Arxiv
-#  - experiment_name: "gat_ogbn_arxiv_multiGPU"
-#    dataset:          "ogbn-arxiv"
-#    model:            "gat"
-#    epochs:           100
-#    batch_size:       [512, 1024]      # Sweep over these larger batch sizes
-#    lr:               0.005
-#    hidden_dim:       128
-#    num_heads:        4
-#    dropout:          0.6
-#    seed:             42
-#    world_size:       4                # Total GPUs across all nodes
-#    nnodes:           1                # Number of nodes
-#    nproc_per_node:   4                # GPUs per node (i.e. 4 GPUs on one node)
-#    node_rank:        0
-#    master_addr:      "127.0.0.1"
-#    master_port:      "29500"
-#    # results_db: "results/gat_arxiv_multi.db"

@@ -6,6 +6,7 @@ import itertools
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 from .train import main as train_main
@@ -29,6 +30,10 @@ def _run_entry():
     parser.add_argument(
         "--sort-by", choices=["date", "acc", "throughput"], default="date",
         help="How to sort runs in results.md. 'date'=timestamp, 'acc'=final_val_acc, 'throughput'=throughput."
+    )
+    parser.add_argument(
+        "--no-cuda", action="store_true",
+        help="Disable CUDA and run on CPU."
     )
     args = parser.parse_args()
 
@@ -78,6 +83,7 @@ def _run_entry():
             # 3) Optional GAT-specific parameters
             num_heads = int(params.get("num_heads", 1))    # default 1 for GCN or if missing
             dropout   = float(params.get("dropout", 0.0))  # default 0.0 if missing
+            no_cuda   = bool(params.get("no_cuda", False))  # disable CUDA if set
 
             # 4) Build results_db path
             results_db = params.get("results_db", "results/results.db")
@@ -115,6 +121,8 @@ def _run_entry():
                     f"--num-heads={num_heads}",
                     f"--dropout={dropout}"
                 ]
+                if no_cuda:
+                    cmd.append("--no-cuda")
                 print(f"\n▶ Running distributed experiment: {exp_name}")
                 print("  Command:", " ".join(cmd))
                 subprocess.run(cmd, check=True)
@@ -139,7 +147,8 @@ def _run_entry():
                     experiment_name=exp_name,
                     results_db=results_db,
                     num_heads=num_heads,
-                    dropout=dropout
+                    dropout=dropout,
+                    no_cuda=no_cuda,
                 )
                 print(f"\n▶ Running single‐process experiment: {exp_name}")
                 train_main(single_args)
@@ -156,11 +165,11 @@ def _run_entry():
 
 def run_entry():
     """
-    Safe wrapper around _run_entry(): catches any exception,
-    prints it, and returns without exiting the shell abruptly.
+    Wrapper around _run_entry(): catches exceptions, prints full traceback,
+    and exits with a non-zero status code.
     """
     try:
         _run_entry()
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return
+    except Exception:
+        traceback.print_exc()
+        sys.exit(1)

@@ -2,30 +2,18 @@
 
 import os
 import sqlite3
-import subprocess
-import platform
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
-def _open_file(path):
-    """
-    Cross-platform open: on macOS uses 'open', on Linux 'xdg-open', on Windows 'start'.
-    """
-    plat = platform.system()
-    if plat == "Darwin":       # macOS
-        subprocess.run(["open", path])
-    elif plat == "Windows":    # Windows
-        os.startfile(path)    # type: ignore
-    else:                      # assume Linux/Unix
-        subprocess.run(["xdg-open", path])
 
-def main(db_path: str, output_dir: str, overwrite: bool = False,
-         sort_by: str = "date", auto_open: bool = False):
+def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = "date"):
     """
-    Reads the `runs` table from db_path, sorts runs by `sort_by`,
-    produces:
-      - Timestamped PNGs for accuracy and throughput
-      - results.md summary with embedded images and metadata tables
+    Reads the `runs` table from db_path, detects if a single parameter was swept,
+    and plots metrics (val accuracy and throughput) against that parameter
+    (e.g., batch_size or world_size). Generates:
+      - PNG plots in output_dir/plots
+      - A Markdown report output_dir/results.md with embedded images and metadata.
     """
 
     # Ensure output directory exists
@@ -37,7 +25,7 @@ def main(db_path: str, output_dir: str, overwrite: bool = False,
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
 
-        # Build ORDER BY clause
+        # Determine ORDER BY clause
         if sort_by == "date":
             order_clause = "ORDER BY timestamp DESC"
         elif sort_by == "acc":
@@ -47,23 +35,15 @@ def main(db_path: str, output_dir: str, overwrite: bool = False,
         else:
             order_clause = "ORDER BY timestamp DESC"
 
-        # Fetch fields, including 'throughput' (required by legacy code)
+        # Fetch relevant columns
         query = f"""
             SELECT
                 experiment_name,
                 dataset,
                 model,
-                epochs,
                 batch_size,
-                lr,
-                hidden_dim,
-                seed,
                 world_size,
-                rank,
-                final_train_loss,
-                final_val_loss,
                 final_val_acc,
-                total_train_time,
                 throughput,
                 timestamp
             FROM runs
@@ -75,140 +55,119 @@ def main(db_path: str, output_dir: str, overwrite: bool = False,
 
     except sqlite3.OperationalError as e:
         msg = str(e)
-        if "no such column: throughput" in msg.lower():
+        if "no such column" in msg.lower():
             raise RuntimeError(
-                f"Plotting error: database '{db_path}' missing column 'throughput'.\n"
-                "  This usually means your training code did not write a 'throughput' field.\n"
-                "  Ensure 'metrics' in train.py includes 'throughput'."
+                f"Plotting error: database '{db_path}' is missing required columns.\n"
+                "Ensure 'batch_size', 'world_size', 'final_val_acc', and 'throughput' are logged."
             )
         else:
             raise
 
-    if len(rows) == 0:
+    if not rows:
         print(f"No runs found in {db_path}. Nothing to plot.")
         return
 
-    # Determine the “primary” experiment for naming
-    primary_exp = rows[0][0]  # experiment_name of first row
-    now = np.datetime64('now')  # placeholder; we'll override with Python datetime
-    from datetime import datetime
-    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # Extract columns into numpy arrays
+    experiment_names = [row[0] for row in rows]
+    datasets = [row[1] for row in rows]
+    models = [row[2] for row in rows]
+    batch_sizes = np.array([row[3] for row in rows], dtype=int)
+    world_sizes = np.array([row[4] for row in rows], dtype=int)
+    val_accs = np.array([row[5] for row in rows], dtype=float)
+    throughputs = np.array([row[6] for row in rows], dtype=float)
+    timestamps = [row[7] for row in rows]
 
-    # Build data structures
-    data_acc = {}         # data_acc[model][world_size] = list of final_val_acc
-    data_throughput = {}  # data_throughput[model][world_size] = list of throughput
+    # Determine primary experiment info (first row)
+    primary_exp = experiment_names[0]
+    primary_dataset = datasets[0]
+    primary_model = models[0]
+    timestamp_for_filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    for (
-        experiment_name,
-        dataset, model, epochs, batch_size, lr, hidden_dim,
-        seed, world_size, rank,
-        final_train_loss, final_val_loss, final_val_acc,
-        total_train_time, throughput, timestamp
-    ) in rows:
-        data_acc.setdefault(model, {}).setdefault(world_size, []).append(final_val_acc)
-        data_throughput.setdefault(model, {}).setdefault(world_size, []).append(throughput)
+    # Identify swept parameter
+    unique_bs = sorted(set(batch_sizes.tolist()))
+    unique_ws = sorted(set(world_sizes.tolist()))
 
-    # 1) Plot: Validation Accuracy vs. #GPUs
+    if len(unique_bs) > 1 and len(unique_ws) == 1:
+        # Sweep over batch_size
+        x_values = unique_bs
+        x_label = "Batch Size"
+        avg_acc = [val_accs[batch_sizes == bs].mean() for bs in x_values]
+        avg_thr = [throughputs[batch_sizes == bs].mean() for bs in x_values]
+    elif len(unique_ws) > 1 and len(unique_bs) == 1:
+        # Sweep over world_size
+        x_values = unique_ws
+        x_label = "Number of GPUs"
+        avg_acc = [val_accs[world_sizes == ws].mean() for ws in x_values]
+        avg_thr = [throughputs[world_sizes == ws].mean() for ws in x_values]
+    else:
+        # Default to world_size if no clear single sweep
+        x_values = unique_ws
+        x_label = "Number of GPUs"
+        avg_acc = [val_accs[world_sizes == ws].mean() for ws in x_values]
+        avg_thr = [throughputs[world_sizes == ws].mean() for ws in x_values]
+
+    # Plot: Validation Accuracy vs. swept parameter
     plt.figure()
-    for model, ws_dict in data_acc.items():
-        ws_list = sorted(ws_dict.keys())
-        avg_acc = [np.mean(ws_dict[ws]) for ws in ws_list]
-        plt.plot(ws_list, avg_acc, marker="o", label=model)
-    plt.xlabel("Number of GPUs (world_size)")
+    plt.plot(x_values, avg_acc, marker="o")
+    plt.xlabel(x_label)
     plt.ylabel("Average Final Validation Accuracy")
-    plt.title("GNN Benchmark: Val Accuracy vs. #GPUs")
-    plt.legend()
+    plt.title(f"{primary_exp}: {primary_model} on {primary_dataset}")
     plt.grid(True)
-
-    acc_filename = f"{now_str}_{primary_exp}_acc_vs_gpus.png"
-    acc_fig = os.path.join(plots_dir, acc_filename)
-    if not os.path.exists(acc_fig) or overwrite:
-        plt.savefig(acc_fig)
-        print(f"Saved figure: {acc_fig}")
+    acc_filename = f"{timestamp_for_filename}_{primary_exp}_acc_vs_{x_label.replace(' ', '_').lower()}.png"
+    acc_path = os.path.join(plots_dir, acc_filename)
+    if not os.path.exists(acc_path) or overwrite:
+        plt.savefig(acc_path)
+        print(f"Saved figure: {acc_path}")
     plt.close()
 
-    # 2) Plot: Throughput vs. #GPUs
+    # Plot: Throughput vs. swept parameter
     plt.figure()
-    for model, ws_dict in data_throughput.items():
-        ws_list = sorted(ws_dict.keys())
-        avg_thr = [np.mean(ws_dict[ws]) for ws in ws_list]
-        plt.plot(ws_list, avg_thr, marker="o", label=model)
-    plt.xlabel("Number of GPUs (world_size)")
+    plt.plot(x_values, avg_thr, marker="o")
+    plt.xlabel(x_label)
     plt.ylabel("Average Throughput (samples/sec)")
-    plt.title("GNN Benchmark: Throughput vs. #GPUs")
-    plt.legend()
+    plt.title(f"{primary_exp}: {primary_model} on {primary_dataset}")
     plt.grid(True)
-
-    thr_filename = f"{now_str}_{primary_exp}_throughput_vs_gpus.png"
-    thr_fig = os.path.join(plots_dir, thr_filename)
-    if not os.path.exists(thr_fig) or overwrite:
-        plt.savefig(thr_fig)
-        print(f"Saved figure: {thr_fig}")
+    thr_filename = f"{timestamp_for_filename}_{primary_exp}_throughput_vs_{x_label.replace(' ', '_').lower()}.png"
+    thr_path = os.path.join(plots_dir, thr_filename)
+    if not os.path.exists(thr_path) or overwrite:
+        plt.savefig(thr_path)
+        print(f"Saved figure: {thr_path}")
     plt.close()
 
-    # 3) Generate results.md
+    # Generate results.md
     md_path = os.path.join(output_dir, "results.md")
     if os.path.exists(md_path) and not overwrite:
         print(f"{md_path} already exists. Use overwrite=True to re-generate.")
         return
 
     with open(md_path, "w") as f:
-        f.write("# GNN Benchmark Results\n\n")
+        f.write(f"# GNN Benchmark Results: {primary_exp}\n\n")
+        f.write(f"**Dataset:** {primary_dataset}  \n")
+        f.write(f"**Model:** {primary_model}  \n")
+        f.write(f"**Sweep parameter:** {x_label}  \n\n")
 
         # Summary table
         f.write("## Summary of Runs\n\n")
-        f.write("| Experiment | Dataset | Model | GPUs | Batch | LR     | Hidden | VAcc     | Thr       | Time    | Timestamp |\n")
-        f.write("|:----------|:-------|:------|:----:|:-----:|:------|:------:|:--------:|:---------:|:-------:|:---------:|\n")
-        for (
-            experiment_name,
-            dataset, model, epochs, batch_size, lr, hidden_dim,
-            seed, world_size, rank,
-            final_train_loss, final_val_loss, final_val_acc,
-            total_train_time, throughput, timestamp
-        ) in rows:
-            time_str = f"{total_train_time:.2f}s"
-            f.write(
-                f"| {experiment_name} | {dataset} | {model} | {world_size:^3d} | {batch_size:^3d} | "
-                f"{lr:.4f} | {hidden_dim:^3d} | {final_val_acc:.4f} | {throughput:.2f} | {time_str} | {timestamp} |\n"
-            )
+        f.write(f"| {x_label} | Val Acc | Throughput |\n")
+        f.write(f"|:{'-' * len(x_label)}:|:-------:|:---------:|\n")
+        for xv, acc_val, thr_val in zip(x_values, avg_acc, avg_thr):
+            f.write(f"| {xv:^8d} | {acc_val:.4f} | {thr_val:.2f} |\n")
         f.write("\n")
 
         # Embed plots
         f.write("## Plots\n\n")
-        f.write(f"![Val Acc vs GPUs](plots/{acc_filename})\n\n")
-        f.write("**Fig 1:** Final validation accuracy vs. #GPUs.\n\n")
-        f.write(f"![Throughput vs GPUs](plots/{thr_filename})\n\n")
-        f.write("**Fig 2:** Throughput (samples/sec) vs. #GPUs.\n\n")
+        f.write(f"![Val Acc vs {x_label}](plots/{acc_filename})\n\n")
+        f.write(f"![Throughput vs {x_label}](plots/{thr_filename})\n\n")
 
-        # Detailed metadata
+        # Detailed metadata per run
         f.write("## Detailed Experiment Metadata\n\n")
-        for (
-            experiment_name,
-            dataset, model, epochs, batch_size, lr, hidden_dim,
-            seed, world_size, rank,
-            final_train_loss, final_val_loss, final_val_acc,
-            total_train_time, throughput, timestamp
-        ) in rows:
-            f.write(f"### Experiment: `{experiment_name}`\n\n")
-            f.write("| Parameter         | Value               |\n")
-            f.write("|:------------------|:--------------------|\n")
-            f.write(f"| Dataset           | {dataset}           |\n")
-            f.write(f"| Model             | {model}             |\n")
-            f.write(f"| Epochs            | {epochs}            |\n")
-            f.write(f"| Batch Size        | {batch_size}        |\n")
-            f.write(f"| Learning Rate     | {lr:.4f}           |\n")
-            f.write(f"| Hidden Dim        | {hidden_dim}        |\n")
-            f.write(f"| Seed              | {seed}              |\n")
-            f.write(f"| World Size (GPUs) | {world_size}        |\n")
-            f.write(f"| Rank              | {rank}              |\n")
-            f.write(f"| Final Train Loss  | {final_train_loss:.4f} |\n")
-            f.write(f"| Final Val Loss    | {final_val_loss:.4f} |\n")
-            f.write(f"| Final Val Acc     | {final_val_acc:.4f} |\n")
-            f.write(f"| Total Time        | {total_train_time:.2f}s |\n")
-            f.write(f"| Throughput        | {throughput:.2f}    |\n")
-            f.write(f"| Timestamp         | {timestamp}         |\n\n")
+        f.write("| Experiment | Dataset | Model | Batch Size | GPUs | Val Acc | Throughput | Timestamp |\n")
+        f.write("|:----------|:-------|:------|:----------:|:----:|:-------:|:---------:|:---------:|\n")
+        for exp_name, ds, mdl, bs, ws, acc_val, thr_val, ts in rows:
+            f.write(
+                f"| {exp_name} | {ds} | {mdl} | {bs:^10d} | {ws:^4d} | "
+                f"{acc_val:.4f} | {thr_val:.2f} | {ts} |\n"
+            )
+        f.write("\n")
 
     print(f"Generated Markdown report: {md_path}")
-
-    if auto_open:
-        _open_file(md_path)

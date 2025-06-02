@@ -150,9 +150,14 @@ def main(args):
     is_ddp = args.world_size > 1
     if is_ddp:
         setup_ddp(args)
-        device = torch.device(f"cuda:{args.local_rank}")
+        if torch.cuda.is_available() and not getattr(args, "no_cuda", False):
+            device = torch.device(f"cuda:{args.local_rank}")
+        else:
+            device = torch.device("cpu")
     else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() and not getattr(args, "no_cuda", False) else "cpu"
+        )
 
     # Print parameter summary (only rank 0/non-DDP)
     if (not is_ddp) or (is_ddp and args.rank == 0):
