@@ -326,3 +326,39 @@ MIT License. Feel free to adapt and extend for your own GNN benchmarking needs.
 
 Dr. Mares Barekzai  
 mares.barekzai@lrz.de  
+
+---
+
+## 📚 Common GNN Models and Datasets (Beyond This Repo)
+
+This section provides an overview of commonly used GNN models and datasets in research and benchmarking, along with their typical computational demands.
+
+### 🧠 GNN Models
+
+| Model        | Description                                                                 | Compute Intensity |
+|--------------|-----------------------------------------------------------------------------|-------------------|
+| **GCN**      | Graph Convolutional Network. Simple and efficient.                         | Low               |
+| **GAT**      | Graph Attention Network. Adds attention mechanisms to GCN.                 | Medium            |
+| **GraphSAGE**| Aggregates neighborhood features via sampling. Scales to large graphs.     | Medium            |
+| **GIN**      | Graph Isomorphism Network. Powerful expressivity for classification tasks. | Medium–High       |
+| **GraphConv**| Simpler spectral method; used in DGL.                                       | Low               |
+| **R-GCN**    | Relational GCN for heterogeneous graphs with edge types.                   | High              |
+| **GatedGCN** | Incorporates gating mechanisms for message passing.                        | High              |
+| **Transformer-based GNNs** | Uses global attention (e.g., Graphormer, SAN).               | Very High         |
+
+### 🗃️ GNN Datasets
+
+| Dataset           | Description                                    | Size       | Compute Intensity |
+|-------------------|------------------------------------------------|------------|-------------------|
+| **Cora/Citeseer/Pubmed** | Classic citation graphs.                 | Small      | Low               |
+| **OGBN-Arxiv**    | Paper citation network from OGB.               | Medium     | Low–Medium        |
+| **OGBN-Products** | Amazon product co-purchasing network.          | Large      | Medium–High       |
+| **Reddit**        | Large-scale Reddit posts network.              | Large      | Medium            |
+| **PPI**           | Protein-Protein Interaction network.           | Medium     | Medium            |
+| **OGBN-Papers100M** | Large-scale academic citation network.       | Very Large | Very High         |
+| **Amazon2M / Friendster** | Ultra-large-scale benchmark datasets.  | Huge       | Extremely High    |
+
+> Tip: Use GraphSAGE or sampling methods for massive datasets that don’t fit in memory.
+
+---
+
