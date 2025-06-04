@@ -1,52 +1,62 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "gnn-bench"
 version = "0.1.0"
-description = "Scalable GNN benchmarking suite (CPU or single‐GPU through multi‐node DDP)."
+description = "Scalable GNN benchmarking suite (CPU or single-GPU through multi-node DDP)."
 readme = "README.md"
 authors = [
-  {name = "Dr. Mares Barekzai", email = "mares.barekzai@lrz.de"}
-]
-license = {text = "MIT"}
+    "Dr. Mares Barekzai <mares.barekzai@lrz.de>"  # <-- Corrected format
+    ]
+license = "MIT"
+packages = [{include = "gnn_bench", from = "src"}]
 
-dependencies = [
-    "numpy",
-    "torch-geometric",
-    "ogb",
-    "filelock",
-    "psutil",
-    "tqdm",
-    "matplotlib>=3.5",
-    "networkx>=2.8",
-    "pyyaml",
-]
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12" # Assuming Python 3.10 based on your example wheels, adjust as needed
 
-[project.optional-dependencies]
-cuda121 = [
-    "torch @ https://download.pytorch.org/whl/cu121/torch-2.2.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
-    "torchvision @ https://download.pytorch.org/whl/cu121/torchvision-0.17.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
-    "torchaudio @ https://download.pytorch.org/whl/cu121/torchaudio-2.2.0%2Bcu121-cp310-cp310-linux_x86_64.whl",
-    "pyg-lib @ https://data.pyg.org/whl/torch-2.2.0+cu121/pyg_lib-0.4.0+pt22cu121-cp310-cp310-linux_x86_64.whl",
-    "torch-scatter @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_scatter-2.1.2+pt22cu121-cp310-cp310-linux_x86_64.whl",
-    "torch-sparse @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_sparse-0.6.18+pt22cu121-cp310-cp310-linux_x86_64.whl",
-    "torch-cluster @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_cluster-1.6.3+pt22cu121-cp310-cp310-linux_x86_64.whl",
-    "torch-spline-conv @ https://data.pyg.org/whl/torch-2.2.0+cu121/torch_spline_conv-1.2.2+pt22cu121-cp310-cp310-linux_x86_64.whl"
-]
+# Core dependencies
+numpy = "1.*"
+torch-geometric = "*"
+ogb = "*"
+filelock = "*"
+psutil = "*"
+tqdm = "*"
+matplotlib = ">=3.5"
+networkx = ">=2.8"
+pyyaml = "*"
 
-mac = [
-    "torch==2.7",
-    "torchvision",
-    "torchaudio",
-    "pyg-lib @ file:///Users/di38qex/wheelhouse/pyg_lib-0.4.0+pt27-cp310-cp310-macosx_15_0_arm64.whl",
-]
+[tool.poetry.group.cuda121.dependencies]
+# PyTorch core libraries - targeting CUDA 12.1
+# Pinning to a specific minor version (e.g., 2.2.x) to align with PyG wheel URL.
+# If you use a different torch version (e.g., 2.1.x), update this and the pyg_cu121 URL below.
+torch = { version = "~2.2.0", source = "pytorch_cu121" }
+torchvision = { version = ">=0.17.0", source = "pytorch_cu121" }
+torchaudio = { version = ">=2.2.0", source = "pytorch_cu121" }
+
+# PyTorch Geometric and related libraries
+# pyg-lib must come from the PyG source for CUDA compatibility.
+pyg-lib = { version = "*", source = "pyg_cu121" }
+torch-scatter = { version = "*", source = "pyg_cu121" }
+torch-sparse = { version = "*", source = "pyg_cu121" }
+torch-cluster = { version = "*", source = "pyg_cu121" }
+torch-spline-conv = { version = "*", source = "pyg_cu121" }
 
 
-[project.scripts]
+# Define specific sources for PyTorch and PyG
+[[tool.poetry.source]]
+name = "pytorch_cu121"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "pyg_cu121"
+# IMPORTANT: This URL MUST match the PyTorch version being installed.
+# This example is for PyTorch 2.2.x and CUDA 12.1.
+url = "https://data.pyg.org/whl/torch-2.2.0+cu121.html"
+priority = "explicit"
+
+[tool.poetry.scripts]
 gnn_bench_run = "gnn_bench.cli:run_entry"
 gnn_bench_plot = "gnn_bench.cli:plot_entry"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
