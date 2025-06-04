@@ -60,3 +60,4 @@ dist/
 pip-wheel-metadata/
 __pypackages__/
 
+*lock
