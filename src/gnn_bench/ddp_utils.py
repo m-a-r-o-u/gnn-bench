@@ -19,7 +19,8 @@ def setup_ddp(args):
         rank=args.rank,
         world_size=args.world_size
     )
-    torch.cuda.set_device(args.local_rank)
+    if torch.cuda.is_available() and not getattr(args, "no_cuda", False):
+        torch.cuda.set_device(args.local_rank)
 
 
 def cleanup_ddp():
