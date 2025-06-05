@@ -250,9 +250,9 @@ experiments:
     master_port:    "29500"
 ```
 
-- `world_size = nnodes * nproc_per_node`.  
-- Each process binds to a separate GPU via `torchrun`.  
-- In full-graph mode, each GPU still processes the entire graph—DDP averages gradients across GPUs.  
+- `world_size = nnodes * nproc_per_node`.
+- Each process binds to a separate GPU via `torchrun`, which invokes `python -m gnn_bench.train` for each worker.
+- In full-graph mode, each GPU still processes the entire graph—DDP averages gradients across GPUs.
 - Throughput (samples/sec) should roughly scale linearly when you go from 1→2→4 GPUs, since each GPU computes a replica of the forward/backward and synchronizes gradients.
 
 ---
