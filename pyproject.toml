@@ -27,17 +27,17 @@ pyyaml = "*"
 # PyTorch core libraries - targeting CUDA 12.1
 # Pinning to a specific minor version (e.g., 2.2.x) to align with PyG wheel URL.
 # If you use a different torch version (e.g., 2.1.x), update this and the pyg_cu121 URL below.
-torch = { version = "~2.2.0", source = "pytorch_cu121" }
-torchvision = { version = ">=0.17.0", source = "pytorch_cu121" }
-torchaudio = { version = ">=2.2.0", source = "pytorch_cu121" }
+torch = { version = "~2.5.0", source = "pytorch_cu121" }
+#torchvision = { version = ">=0.17.0", source = "pytorch_cu121" }
+#torchaudio = { version = ">=2.2.0", source = "pytorch_cu121" }
 
 # PyTorch Geometric and related libraries
 # pyg-lib must come from the PyG source for CUDA compatibility.
-pyg-lib = { version = "*", source = "pyg_cu121" }
-torch-scatter = { version = "*", source = "pyg_cu121" }
-torch-sparse = { version = "*", source = "pyg_cu121" }
-torch-cluster = { version = "*", source = "pyg_cu121" }
-torch-spline-conv = { version = "*", source = "pyg_cu121" }
+pyg-lib = { version = "*", source = "pyg_pt25_cu121" }
+torch-scatter = { version = "*", source = "pyg_pt25_cu121" }
+torch-sparse = { version = "*", source = "pyg_pt25_cu121" }
+torch-cluster = { version = "*", source = "pyg_pt25_cu121" }
+torch-spline-conv = { version = "*", source = "pyg_pt25_cu121" }
 
 
 # Define specific sources for PyTorch and PyG
@@ -47,10 +47,17 @@ url = "https://download.pytorch.org/whl/cu121"
 priority = "explicit"
 
 [[tool.poetry.source]]
-name = "pyg_cu121"
+name = "pyg_pt22_cu121"
 # IMPORTANT: This URL MUST match the PyTorch version being installed.
 # This example is for PyTorch 2.2.x and CUDA 12.1.
 url = "https://data.pyg.org/whl/torch-2.2.0+cu121.html"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "pyg_pt25_cu121"
+# IMPORTANT: This URL MUST match the PyTorch version being installed.
+# This example is for PyTorch 2.2.x and CUDA 12.1.
+url = "https://data.pyg.org/whl/torch-2.5.0+cu121.html"
 priority = "explicit"
 
 [tool.poetry.scripts]
