@@ -1,0 +1,15 @@
+# config/gat_ogbn_arxiv.yaml
+
+experiments:
+  - experiment_name: "gat_ogbn_arxiv_gpu"
+    dataset:     "ogbn-arxiv"         # OGB’s ArXiv paper citation graph
+    model:       "gat"                # Graph Attention Network
+    epochs:      5                    # Number of training epochs
+    batch_size:  [16, 32, 64, 128, 256, 512]           # Sweep over these batch sizes
+    lr:          0.005                # Learning rate
+    hidden_dim:  128                  # Hidden dimension size
+    num_heads:   4                    # GAT: number of attention heads
+    dropout:     0.6                  # GAT: dropout probability
+    seed:        42
+    world_size:  2                    # Single‐process (no DDP)
+    no_cuda:     false                # Force CPU for large dataset
