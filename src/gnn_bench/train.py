@@ -1,5 +1,6 @@
 # src/gnn_bench/train.py
 
+import argparse
 import time
 import random
 import os
@@ -330,3 +331,33 @@ def main(args):
 
     if is_ddp:
         cleanup_ddp()
+
+
+def train_entry():
+    """Command line entry point for a single training run (used by torchrun)."""
+    parser = argparse.ArgumentParser(description="GNN Bench training entry")
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--world-size", type=int, default=int(os.environ.get("WORLD_SIZE", 1)))
+    parser.add_argument("--rank", type=int, default=int(os.environ.get("RANK", 0)))
+    parser.add_argument("--local-rank", type=int, default=int(os.environ.get("LOCAL_RANK", 0)))
+    parser.add_argument("--distributed-backend", default="nccl")
+    parser.add_argument("--master-addr", default=os.environ.get("MASTER_ADDR", "127.0.0.1"))
+    parser.add_argument("--master-port", default=os.environ.get("MASTER_PORT", "29500"))
+    parser.add_argument("--experiment-name", default="exp")
+    parser.add_argument("--results-db", default="results/results.db")
+    parser.add_argument("--num-heads", type=int, default=1)
+    parser.add_argument("--dropout", type=float, default=0.0)
+    parser.add_argument("--no-cuda", action="store_true")
+
+    args = parser.parse_args()
+    main(args)
+
+
+if __name__ == "__main__":
+    train_entry()
