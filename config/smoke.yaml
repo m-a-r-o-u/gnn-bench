@@ -24,3 +24,14 @@ experiments:
     seed: 42
     world_size: 1
     no_cuda: false
+
+  - experiment_name: "smoke_test_2gpu"
+    dataset: "Cora"
+    model: "gcn"
+    epochs: 5
+    batch_size: [16, 32, 64, 128, 256, 512]
+    lr: 0.001
+    hidden_dim: 64
+    seed: 42
+    world_size: 2
+    no_cuda: false
