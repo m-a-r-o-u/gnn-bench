@@ -16,7 +16,8 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
     and plots metrics (val accuracy and throughput) against that parameter
     (e.g., batch_size or world_size). Generates:
       - PNG plots in output_dir/plots
-      - A Markdown report output_dir/results.md with embedded images and metadata.
+      - A Markdown report output_dir/<timestamp>_<experiment>_results.md with
+        embedded images and metadata.
     """
 
     # Ensure output directory exists
@@ -137,8 +138,9 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
         print(f"Saved figure: {thr_path}")
     plt.close()
 
-    # Generate results.md
-    md_path = os.path.join(output_dir, "results.md")
+    # Generate timestamped results.md so successive runs don't overwrite
+    md_filename = f"{timestamp_for_filename}_{primary_exp}_results.md"
+    md_path = os.path.join(output_dir, md_filename)
     if os.path.exists(md_path) and not overwrite:
         print(f"{md_path} already exists. Use overwrite=True to re-generate.")
         return

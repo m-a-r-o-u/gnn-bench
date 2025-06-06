@@ -13,7 +13,8 @@ A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-
 - **Plotting**: Automatically generate:
   - **`results/plots/<timestamp>_<experiment>_acc_vs_gpus.png`**  
   - **`results/plots/<timestamp>_<experiment>_throughput_vs_gpus.png`**  
-  - **`results/results.md`** with embedded images, summary table, and metadata.
+  - **`results/<timestamp>_<experiment>_results.md`** with embedded images,
+    summary table, and metadata.
 - **Config-driven**: YAML sweep files let you specify multiple experiments, including parameter sweeps (batch_size, learning rate, world_size, etc.).
 - **Single-line summaries**: Prints a concise “Averages (excl. 1st epoch)” line at the end of each run.  
 - **Easy install/clean**: `setup.sh` creates or activates a virtual environment, installs dependencies (CPU or CUDA), and cleans artifacts.
@@ -41,7 +42,7 @@ A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-
     ├── results.db         # SQLite database (created after first run)
     ├── plots
     │   └── <timestamp>_…  # Auto-generated PNGs
-    └── results.md         # Auto-generated Markdown report
+    └── <timestamp>_<experiment>_results.md  # Auto-generated Markdown report
 ```
 
 ---
@@ -121,7 +122,7 @@ gnn_bench_run --config config/gat_ogbn_arxiv.yaml --plots
 
 - **`--config`** (or `-c`) points to your YAML file. If omitted, defaults to `config/default.yaml`.
 - **`--plots`** tells the script to run the plotting step after all experiments finish.
-- **`--sort-by`** controls sorting in `results.md` (default = `date`). Options: `date`, `acc`, `throughput`.
+- **`--sort-by`** controls sorting in the Markdown report (default = `date`). Options: `date`, `acc`, `throughput`.
 
 Each experiment in the YAML file expands into one (or more) runs. For each run you’ll see:
 
@@ -158,7 +159,7 @@ gnn_bench_plot --db results/results.db --output-dir results --sort-by throughput
 ```
 
 - **`--db <path>`**: path to the SQLite DB (default = `results/results.db`).
-- **`--output-dir <dir>`**: directory to save `plots/` and `results.md`.  
+- **`--output-dir <dir>`**: directory to save `plots/` and the Markdown report.
 - **`--sort-by`**: `date` (default), `acc`, or `throughput`.
 
 ---
@@ -173,7 +174,7 @@ results/
 ├── plots/
 │   ├── 2025-06-01_20-08-04_gat_ogbn_arxiv_acc_vs_gpus.png
 │   └── 2025-06-01_20-08-04_gat_ogbn_arxiv_throughput_vs_gpus.png
-└── results.md
+└── 2025-06-01_20-08-04_gat_ogbn_arxiv_results.md
 ```
 
 - **`results.db`**: SQLite database containing tables:  
@@ -181,7 +182,7 @@ results/
 - **`results/plots/*.png`**:  
   - `acc_vs_gpus.png`: average validation accuracy vs. world_size (GPUs).  
   - `throughput_vs_gpus.png`: average throughput vs. world_size.  
-- **`results/results.md`**:  
+- **`results/<timestamp>_<experiment>_results.md`**:
   A Markdown report that includes:  
   1. A summary table of all runs (parameters, final metrics, timestamp).  
   2. Embedded plots.  
@@ -298,9 +299,9 @@ experiments:
    gnn_bench_run --config config/gat_ogbn_arxiv.yaml --plots
    ```
 
-3. **Inspect Results**  
-   - Open `results/results.md` in a Markdown viewer or browser.  
-   - Examine `results/plots/…acc_vs_gpus.png` and `…throughput_vs_gpus.png`.  
+3. **Inspect Results**
+   - Open the generated Markdown file (e.g., `results/<timestamp>_<experiment>_results.md`) in a viewer or browser.
+   - Examine `results/plots/…acc_vs_gpus.png` and `…throughput_vs_gpus.png`.
 
 4. **Plot Only (no new runs)**  
    ```bash
