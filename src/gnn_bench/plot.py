@@ -30,25 +30,27 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
 
     config_text = ""
     exp_cfg = {}
-    diff_desc = {}
+    diff_params = {}
+    common_cfg = {}
     sweep_param = {}
     if config_path and os.path.isfile(config_path):
         with open(config_path, "r") as fcfg:
             config_text = fcfg.read()
             cfg = yaml.safe_load(config_text) or {}
             experiments_cfg = cfg.get("experiments", [])
-            # Determine varying keys across experiments
-            value_sets = {}
+            # Determine value sets per key
+            value_sets: dict[str, set[str]] = {}
             for exp in experiments_cfg:
                 for k, v in exp.items():
                     value_sets.setdefault(k, set()).add(str(v))
             varying_keys = {k for k, vals in value_sets.items() if len(vals) > 1}
+            common_cfg = {
+                k: next(iter(vals)) for k, vals in value_sets.items() if len(vals) == 1
+            }
             for exp in experiments_cfg:
                 name = exp.get("experiment_name", "exp")
                 exp_cfg[name] = exp
-                diff_desc[name] = ", ".join(
-                    f"{k}={exp[k]}" for k in varying_keys if k in exp
-                )
+                diff_params[name] = {k: exp[k] for k in varying_keys if k in exp}
                 for k, v in exp.items():
                     if isinstance(v, list):
                         sweep_param[name] = k
@@ -128,11 +130,11 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
 
     with open(md_path, "w") as f:
         f.write("# GNN Benchmark Results\n\n")
-        if config_text:
-            f.write("## Config Overview\n\n")
+        if common_cfg:
+            f.write("## Common Settings\n\n")
             f.write("```yaml\n")
-            f.write(config_text)
-            f.write("\n```\n\n")
+            f.write(yaml.safe_dump(common_cfg, sort_keys=False))
+            f.write("```\n\n")
 
         for exp in sorted_exps:
             exp_rows = grouped[exp]
@@ -180,9 +182,12 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
             plt.close()
 
             f.write(f"## {exp}\n\n")
-            diff_text = diff_desc.get(exp)
-            if diff_text:
-                f.write(f"**Different config:** {diff_text}  \n\n")
+            diff_cfg = diff_params.get(exp)
+            if diff_cfg:
+                f.write("**Different config:**\n")
+                f.write("```yaml\n")
+                f.write(yaml.safe_dump(diff_cfg, sort_keys=False))
+                f.write("```\n\n")
 
             f.write("| {} | Val Acc | Throughput |\n".format(x_label))
             f.write("|:{}:|:-------:|:---------:|\n".format('-' * len(x_label)))
@@ -197,17 +202,28 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
         f.write("| Experiment | Dataset | Model | Batch Size | GPUs | Val Acc | Throughput | Timestamp |\n")
         f.write("|:----------|:-------|:------|:----------:|:----:|:-------:|:---------:|:---------:|\n")
 
-        sorted_rows = []
+        meta_group: dict[str, list[tuple]] = {}
+        latest_ts: dict[str, datetime] = {}
         for row in rows:
             exp = row[0]
+            meta_group.setdefault(exp, []).append(row)
+            ts = datetime.fromisoformat(row[7])
+            if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            prev = latest_ts.get(exp, ts)
+            if prev.tzinfo is None or prev.tzinfo.utcoffset(prev) is None:
+                prev = prev.replace(tzinfo=timezone.utc)
+            latest_ts[exp] = max(prev, ts)
+
+        sorted_exps_meta = sorted(meta_group.keys(), key=lambda e: latest_ts[e], reverse=True)
+        for exp in sorted_exps_meta:
             param = sweep_param.get(exp, "world_size")
             idx = 3 if param == "batch_size" else 4
-            sorted_rows.append((first_ts[exp], row[idx], row))
-        sorted_rows.sort()
-        for _, _, r in sorted_rows:
-            f.write(
-                f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:^10d} | {r[4]:^4d} | {r[5]:.4f} | {r[6]:.2f} | {r[7]} |\n"
-            )
+            rows_sorted = sorted(meta_group[exp], key=lambda r: r[idx])
+            for r in rows_sorted:
+                f.write(
+                    f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:^10d} | {r[4]:^4d} | {r[5]:.4f} | {r[6]:.2f} | {r[7]} |\n"
+                )
         f.write("\n")
 
     print(f"Generated Markdown report: {md_path}")
