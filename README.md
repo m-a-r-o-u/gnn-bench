@@ -55,28 +55,43 @@ A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-
    cd gnn-bench
    ```
 
-2. **Run `setup.sh` to create or activate a Python 3.10 venv and install dependencies**. For CPU-only:
+2. **Install [Poetry](https://python-poetry.org/)** if it is not already available.
+   The recommended way is:
    ```bash
-   source setup.sh install cpu
+   curl -sSL https://install.python-poetry.org | python3 -
    ```
-   For CUDA 12.1 (PyTorch + PyG CUDA wheels):
+   or via `pipx`:
    ```bash
-   source setup.sh install cuda121
-   ```
-   For editable install (so changes in `src/` reflect immediately):
-   ```bash
-   source setup.sh install -e
-   ```
-   Or editable + CPU extras:
-   ```bash
-   source setup.sh install cpu -e
+   pipx install poetry
    ```
 
-3. **Verify** you have `gnn_bench_run` and `gnn_bench_plot` in your path:
+3. **Create the virtual environment and install the package with Poetry**.
+   Poetry will place the environment under `.venv` thanks to `poetry.toml`.
+   For a CPU-only setup simply run:
    ```bash
-   which gnn_bench_run
-   which gnn_bench_plot
+   poetry install
    ```
+   To install the CUDA 12.1 stack (PyTorch + PyG wheels) use:
+   ```bash
+   poetry install --with cuda121
+   ```
+   Afterwards activate the shell with `poetry shell` or prefix commands with
+   `poetry run`:
+   ```bash
+   poetry run gnn_bench_run --help
+   ```
+
+4. **Verify** the entry points are available:
+   ```bash
+   poetry run gnn_bench_run --version
+   poetry run gnn_bench_plot --help
+   ```
+
+The project currently requires **Python `>=3.9,<3.12`** and ships
+CUDA 12.1 wheels for **PyTorch `~2.5.0`** and matching **PyG** packages.
+These values are declared in `pyproject.toml` under
+`[tool.poetry.dependencies]` and `[tool.poetry.group.cuda121.dependencies]`.
+Adjust them there if you need a different Python, CUDA or PyTorch version.
 
 ---
 
@@ -289,23 +304,23 @@ experiments:
 
 ## Example Workflow
 
-1. **Install (CPU)**  
+1. **Install the package**
    ```bash
-   source setup.sh install cpu
+   poetry install --with cuda121  # omit `--with cuda121` for CPU only
    ```
 
 2. **Run GAT on OGBN-Arxiv**
    ```bash
-   gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
+   poetry run gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
    ```
 
 3. **Inspect Results**
    - Open the generated Markdown file (e.g., `results/<timestamp>_<experiment>_results.md`) in a viewer or browser.
    - Examine `results/plots/…acc_vs_gpus.png` and `…throughput_vs_gpus.png`.
 
-4. **Plot Only (no new runs)**  
+4. **Plot Only (no new runs)**
    ```bash
-   gnn_bench_plot --db results/results.db --output-dir results --sort-by acc
+   poetry run gnn_bench_plot --db results/results.db --output-dir results --sort-by acc
    ```
 
 ---
