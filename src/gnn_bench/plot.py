@@ -11,6 +11,14 @@ from datetime import datetime, timezone
 import yaml
 
 
+def _parse_timestamp(ts_str: str) -> datetime:
+    """Return a timezone-aware datetime for comparison and display."""
+    ts = datetime.fromisoformat(ts_str)
+    if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts
+
+
 def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = "date", config_path: str | None = None):
     """
     Reads the `runs` table from db_path, detects if a single parameter was swept,
@@ -113,12 +121,8 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
     for row in rows:
         exp = row[0]
         grouped.setdefault(exp, []).append(row)
-        ts = datetime.fromisoformat(row[7])
-        if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+        ts = _parse_timestamp(row[7])
         prev_ts = first_ts.get(exp, ts)
-        if prev_ts.tzinfo is None or prev_ts.tzinfo.utcoffset(prev_ts) is None:
-            prev_ts = prev_ts.replace(tzinfo=timezone.utc)
         first_ts[exp] = min(prev_ts, ts)
 
     # Sort experiments by earliest timestamp
@@ -207,13 +211,12 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
 
         rows_meta = sorted(
             rows,
-            key=lambda r: datetime.fromisoformat(r[7]),
+            key=lambda r: _parse_timestamp(r[7]),
             reverse=True,
         )
 
         for r in rows_meta:
-            ts = datetime.fromisoformat(r[7])
-            ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+            ts_str = _parse_timestamp(r[7]).strftime("%Y-%m-%dT%H:%M:%S")
             f.write(
                 f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:^10d} | {r[4]:^4d} | {r[5]:.4f} | {r[6]:.2f} | {ts_str} |\n"
             )
