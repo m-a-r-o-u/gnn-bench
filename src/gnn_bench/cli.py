@@ -188,7 +188,8 @@ def _run_entry():
                 db_path=last_results_db,
                 output_dir=os.path.dirname(last_results_db),
                 overwrite=True,
-                sort_by=args.sort_by
+                sort_by=args.sort_by,
+                config_path=config_path,
             )
         except Exception:
             traceback.print_exc()
@@ -207,3 +208,20 @@ def run_entry():
     except Exception:
         traceback.print_exc()
         sys.exit(1)
+
+
+def plot_entry():
+    """Entry point for the standalone plotting CLI."""
+    parser = argparse.ArgumentParser(description="Generate Markdown report from a results database")
+    parser.add_argument("--db", dest="db_path", required=True, help="Path to results.db")
+    parser.add_argument("--output-dir", required=True, help="Directory to write plots and Markdown")
+    parser.add_argument("--sort-by", choices=["date", "acc", "throughput"], default="date")
+    parser.add_argument("--config", dest="config_path", help="YAML config for experiment definitions")
+    args = parser.parse_args()
+    plot_main(
+        db_path=args.db_path,
+        output_dir=args.output_dir,
+        overwrite=True,
+        sort_by=args.sort_by,
+        config_path=args.config_path,
+    )

@@ -2,6 +2,7 @@
 
 import sqlite3
 import threading
+from datetime import datetime
 from typing import Dict, Any
 
 _LOCK = threading.Lock()
@@ -74,6 +75,7 @@ class DBLogger:
             # Timeout for waiting on database locks in concurrent scenarios
             conn = sqlite3.connect(self.db_path, timeout=30)
             c = conn.cursor()
+            timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
             c.execute("""
                 INSERT INTO runs (
                     experiment_name,
@@ -90,8 +92,9 @@ class DBLogger:
                     final_val_loss,
                     final_val_acc,
                     total_train_time,
-                    throughput
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    throughput,
+                    timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, (
                 params["experiment_name"],
                 params["dataset"],
@@ -108,6 +111,7 @@ class DBLogger:
                 metrics["final_val_acc"],
                 metrics["total_train_time"],
                 metrics["throughput"],
+                timestamp,
             ))
             conn.commit()
             conn.close()
