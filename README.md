@@ -116,12 +116,12 @@ experiments:
 ### Running Experiments
 
 ```bash
-# Run all experiments defined in a YAML config, then plot:
-gnn_bench_run --config config/gat_ogbn_arxiv.yaml --plots
+# Run all experiments defined in a YAML config, then generate a report:
+gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
 ```
 
 - **`--config`** (or `-c`) points to your YAML file. If omitted, defaults to `config/default.yaml`.
-- **`--plots`** tells the script to run the plotting step after all experiments finish.
+- **`--report`** tells the script to generate the Markdown report (with plots) after all experiments finish.
 - **`--sort-by`** controls sorting in the Markdown report (default = `date`). Options: `date`, `acc`, `throughput`.
 
 Each experiment in the YAML file expands into one (or more) runs. For each run you’ll see:
@@ -294,9 +294,9 @@ experiments:
    source setup.sh install cpu
    ```
 
-2. **Run GAT on OGBN-Arxiv**  
+2. **Run GAT on OGBN-Arxiv**
    ```bash
-   gnn_bench_run --config config/gat_ogbn_arxiv.yaml --plots
+   gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
    ```
 
 3. **Inspect Results**

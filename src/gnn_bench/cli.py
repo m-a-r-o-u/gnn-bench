@@ -24,8 +24,8 @@ def _run_entry():
         help="Path to YAML config file defining experiments. Default: config/default.yaml"
     )
     parser.add_argument(
-        "--plots", action="store_true",
-        help="After experiments complete, run the plotting step."
+        "--report", action="store_true",
+        help="After experiments complete, generate the Markdown report with plots."
     )
     parser.add_argument(
         "--sort-by", choices=["date", "acc", "throughput"], default="date",
@@ -180,9 +180,9 @@ def _run_entry():
             for ns in sp_tasks:
                 _run_single(ns)
 
-    # After all experiments, optionally call plotting
-    if args.plots and last_results_db is not None:
-        print(f"\n▶ Generating plots for: {last_results_db}")
+    # After all experiments, optionally generate the report
+    if args.report and last_results_db is not None:
+        print(f"\n▶ Generating report for: {last_results_db}")
         try:
             plot_main(
                 db_path=last_results_db,
