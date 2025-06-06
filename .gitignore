@@ -18,6 +18,7 @@ venv/
 *.onnx
 
 # Dataset files (customize as needed)
+data
 data/
 datasets/
 *.h5
