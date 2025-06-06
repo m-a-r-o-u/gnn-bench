@@ -29,7 +29,10 @@ def _run_entry():
     )
     parser.add_argument(
         "--sort-by", choices=["date", "acc", "throughput"], default="date",
-        help="How to sort runs in results.md. 'date'=timestamp, 'acc'=final_val_acc, 'throughput'=throughput."
+        help=(
+            "How to sort runs in the generated Markdown report. "
+            "'date'=timestamp, 'acc'=final_val_acc, 'throughput'=throughput."
+        ),
     )
     parser.add_argument(
         "--no-cuda", action="store_true",
