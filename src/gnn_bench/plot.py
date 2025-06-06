@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 import yaml
 
 
@@ -109,7 +109,12 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
         exp = row[0]
         grouped.setdefault(exp, []).append(row)
         ts = datetime.fromisoformat(row[7])
-        first_ts[exp] = min(first_ts.get(exp, ts), ts)
+        if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        prev_ts = first_ts.get(exp, ts)
+        if prev_ts.tzinfo is None or prev_ts.tzinfo.utcoffset(prev_ts) is None:
+            prev_ts = prev_ts.replace(tzinfo=timezone.utc)
+        first_ts[exp] = min(prev_ts, ts)
 
     # Sort experiments by earliest timestamp
     sorted_exps = sorted(grouped.keys(), key=lambda x: first_ts[x])
