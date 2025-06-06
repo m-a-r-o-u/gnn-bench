@@ -88,6 +88,9 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
         rows = c.fetchall()
         conn.close()
 
+        if exp_cfg:
+            rows = [r for r in rows if r[0] in exp_cfg]
+
     except sqlite3.OperationalError as e:
         msg = str(e)
         if "no such column" in msg.lower():
@@ -202,28 +205,18 @@ def main(db_path: str, output_dir: str, overwrite: bool = False, sort_by: str = 
         f.write("| Experiment | Dataset | Model | Batch Size | GPUs | Val Acc | Throughput | Timestamp |\n")
         f.write("|:----------|:-------|:------|:----------:|:----:|:-------:|:---------:|:---------:|\n")
 
-        meta_group: dict[str, list[tuple]] = {}
-        latest_ts: dict[str, datetime] = {}
-        for row in rows:
-            exp = row[0]
-            meta_group.setdefault(exp, []).append(row)
-            ts = datetime.fromisoformat(row[7])
-            if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            prev = latest_ts.get(exp, ts)
-            if prev.tzinfo is None or prev.tzinfo.utcoffset(prev) is None:
-                prev = prev.replace(tzinfo=timezone.utc)
-            latest_ts[exp] = max(prev, ts)
+        rows_meta = sorted(
+            rows,
+            key=lambda r: datetime.fromisoformat(r[7]),
+            reverse=True,
+        )
 
-        sorted_exps_meta = sorted(meta_group.keys(), key=lambda e: latest_ts[e], reverse=True)
-        for exp in sorted_exps_meta:
-            param = sweep_param.get(exp, "world_size")
-            idx = 3 if param == "batch_size" else 4
-            rows_sorted = sorted(meta_group[exp], key=lambda r: r[idx])
-            for r in rows_sorted:
-                f.write(
-                    f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:^10d} | {r[4]:^4d} | {r[5]:.4f} | {r[6]:.2f} | {r[7]} |\n"
-                )
+        for r in rows_meta:
+            ts = datetime.fromisoformat(r[7])
+            ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S")
+            f.write(
+                f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:^10d} | {r[4]:^4d} | {r[5]:.4f} | {r[6]:.2f} | {ts_str} |\n"
+            )
         f.write("\n")
 
     print(f"Generated Markdown report: {md_path}")
