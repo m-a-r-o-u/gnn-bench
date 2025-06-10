@@ -51,7 +51,7 @@ A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-
 
 1. **Clone the repository** (if you haven’t already):
    ```bash
-   git clone https://github.com/yourusername/gnn-bench.git
+   git clone git@gitlab.lrz.de:0000000001579799/gnn-bench.git
    cd gnn-bench
    ```
 
@@ -67,13 +67,9 @@ A scalable benchmarking suite for Graph Neural Networks (GNNs), supporting mini-
 
 3. **Create the virtual environment and install the package with Poetry**.
    Poetry will place the environment under `.venv` thanks to `poetry.toml`.
-   For a CPU-only setup simply run:
+   Install all dependencies (including the default CUDA stack) with:
    ```bash
    poetry install
-   ```
-   To install the CUDA 12.1 stack (PyTorch + PyG wheels) use:
-   ```bash
-   poetry install --with cuda121
    ```
    Afterwards activate the shell with `poetry shell` or prefix commands with
    `poetry run`:
@@ -99,26 +95,36 @@ Adjust them there if you need a different Python, CUDA or PyTorch version.
 
 Put your YAML files under `config/`. Two examples are provided:
 
-- **`config/default.yaml`**:  
+- **`config/default.yaml`**:
   A simple example (Cora + GCN, no DDP).
-- **`config/gat_ogbn_arxiv.yaml`**:  
-  A more advanced GAT on OGBN-Arxiv, sweeping batch_size.
+- **`config/smoke.yaml`**:
+  A short smoke-test covering CPU, single GPU and 2-GPU runs.
 
-### Example `config/gat_ogbn_arxiv.yaml`
+### Example `config/smoke.yaml`
 
 ```yaml
 experiments:
-  - experiment_name: "gat_ogbn_arxiv"
-    dataset:     "ogbn-arxiv"         # OGB’s ArXiv citation graph
-    model:       "gat"                # Graph Attention Network
-    epochs:      5                    # Number of epochs
-    batch_size:  [256, 512, 1024]     # Sweep over these batch sizes
-    lr:          0.005                # Learning rate
-    hidden_dim:  128                  # Hidden dimension size
-    num_heads:   4                    # GAT attention heads
-    dropout:     0.6                  # Dropout probability
-    seed:        42
-    world_size:  1                    # Single-process, mini-batch neighbor sampling
+  - experiment_name: "smoke_test_cpu"
+    dataset: "Cora"
+    model: "gcn"
+    epochs: 5
+    batch_size: [16, 32, 64, 128, 256, 512]
+    lr: 0.001
+    hidden_dim: 64
+    seed: 42
+    world_size: 1
+    no_cuda: true
+
+  - experiment_name: "smoke_test_gpu"
+    dataset: "Cora"
+    model: "gcn"
+    epochs: 5
+    batch_size: [16, 32, 64, 128, 256, 512]
+    lr: 0.001
+    hidden_dim: 64
+    seed: 42
+    world_size: 1
+    no_cuda: false
 ```
 
 - **`batch_size`** defines the number of root nodes per mini-batch subgraph in neighbor sampling, controlling subgraph size and memory usage.
@@ -131,8 +137,10 @@ experiments:
 ### Running Experiments
 
 ```bash
-# Run all experiments defined in a YAML config, then generate a report:
-gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
+# Activate the virtual environment and run the smoke-test configuration:
+poetry shell
+gnn_bench_run --config config/smoke.yaml --report
+# Outputs (DB, plots and a Markdown report) will appear in the `results/` directory.
 ```
 
 - **`--config`** (or `-c`) points to your YAML file. If omitted, defaults to `config/default.yaml`.
@@ -141,9 +149,9 @@ gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
 
 Each experiment in the YAML file expands into one (or more) runs. For each run you’ll see:
 
-1. A one-line parameter summary:  
+1. A one-line parameter summary:
    ```
-   ▶ Experiment parameters: dataset=ogbn-arxiv  model=gat  epochs=5  batch_size=256  lr=0.0050  hidden_dim=128  num_heads=4  dropout=0.60  seed=42  world_size=1
+   ▶ Experiment parameters: dataset=Cora  model=gcn  epochs=5  batch_size=16  lr=0.0010  hidden_dim=64  seed=42  world_size=1
    ```
 
 2. Per-epoch metrics (for 5 epochs by default):  
@@ -159,7 +167,7 @@ Each experiment in the YAML file expands into one (or more) runs. For each run y
    TLoss=3.4067 TAcc=0.1717 VLoss=2.8599 VAcc=0.2763 Time=4.82s Thr=35241.55 smpls/s
    ```
 
-4. If you swept `batch_size`, you’ll see this three times (once per value 256, 512, 1024).
+4. If you swept `batch_size`, you’ll see this six times (from 16 up to 512).
 
 5. After all runs, plots and a Markdown report are generated under `results/`.
 
@@ -187,9 +195,9 @@ After a successful run:
 results/
 ├── results.db
 ├── plots/
-│   ├── 2025-06-01_20-08-04_gat_ogbn_arxiv_acc_vs_gpus.png
-│   └── 2025-06-01_20-08-04_gat_ogbn_arxiv_throughput_vs_gpus.png
-└── 2025-06-01_20-08-04_gat_ogbn_arxiv_results.md
+│   ├── 2025-06-01_20-08-04_smoke_test_cpu_acc_vs_gpus.png
+│   └── 2025-06-01_20-08-04_smoke_test_cpu_throughput_vs_gpus.png
+└── 2025-06-01_20-08-04_smoke_test_cpu_results.md
 ```
 
 - **`results.db`**: SQLite database containing tables:  
@@ -306,19 +314,22 @@ experiments:
 
 1. **Install the package**
    ```bash
-   poetry install --with cuda121  # omit `--with cuda121` for CPU only
+   poetry install
    ```
-
-2. **Run GAT on OGBN-Arxiv**
+2. **Activate the environment**
    ```bash
-   poetry run gnn_bench_run --config config/gat_ogbn_arxiv.yaml --report
+   poetry shell
    ```
 
-3. **Inspect Results**
+3. **Run the smoke config**
+   ```bash
+   gnn_bench_run --config config/smoke.yaml --report
+   ```
+
+4. **Inspect Results**
    - Open the generated Markdown file (e.g., `results/<timestamp>_<experiment>_results.md`) in a viewer or browser.
    - Examine `results/plots/…acc_vs_gpus.png` and `…throughput_vs_gpus.png`.
-
-4. **Plot Only (no new runs)**
+5. **Plot Only (no new runs)**
    ```bash
    poetry run gnn_bench_plot --db results/results.db --output-dir results --sort-by acc
    ```
