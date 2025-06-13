@@ -22,6 +22,7 @@ tqdm = "*"
 matplotlib = ">=3.5"
 networkx = ">=2.8"
 pyyaml = "*"
+pandas = "*"
 
 [tool.poetry.group.cuda121.dependencies]
 # PyTorch core libraries - targeting CUDA 12.1
@@ -63,6 +64,7 @@ priority = "explicit"
 [tool.poetry.scripts]
 gnn_bench_run = "gnn_bench.cli:run_entry"
 gnn_bench_plot = "gnn_bench.cli:plot_entry"
+slurm_report = "gnn_bench.slurm_report:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
